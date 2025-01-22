@@ -44,7 +44,7 @@ struct WakaTimeStats: Decodable {
 }
 
 class WakaTimeService {
-    private let apiKey = "10fe7598-e744-49be-95fe-337e2971c3c9"
+    private let apiKey = ""
     private let apiUrl = "https://waka.hackclub.com/api/summary?interval=all_time"
     
     func fetchHours(completion: @escaping (WakaTimeStats?) -> Void) {
