@@ -44,8 +44,16 @@ struct WakaTimeStats: Decodable {
 }
 
 class WakaTimeService {
-    private let apiKey = ""
-    private let apiUrl = "https://waka.hackclub.com/api/summary?interval=all_time"
+    static let shared = WakaTimeService()
+    
+    private let userDefaults = UserDefaults(suiteName: "group.com.liamwilley.WakatimeWidget")
+    private let apiKeyString = "wakaTimeApiKey"
+    private var apiKey = ""
+    private let apiUrl = "https://waka.hackclub.com/api/summary?interval=today"
+    
+    init() {
+        apiKey = userDefaults?.string(forKey: apiKeyString) ?? ""
+    }
     
     func fetchHours(completion: @escaping (WakaTimeStats?) -> Void) {
         guard let url = URL(string: apiUrl) else {
@@ -70,6 +78,8 @@ class WakaTimeService {
                 return
             }
             
+            print("Widget response: \(String(data: data, encoding: .utf8) ?? "No data")")
+            
             do {
                 let decoder = JSONDecoder()
                 let stats = try decoder.decode(WakaTimeStats.self, from: data)
@@ -83,19 +93,13 @@ class WakaTimeService {
     
     func fetchStats(completion: @escaping (WakaTimeStats?) -> Void) {
         fetchHours { stats in
-            if let stats = stats {
-                print("Fetched stats: \(stats)") // Debug print to show the stats
-                completion(stats)
-            } else {
-                print("Failed to fetch stats")
-                completion(nil)
-            }
+            completion(stats)
         }
     }
 }
 
 struct Provider: TimelineProvider {
-    let service = WakaTimeService()
+    let service = WakaTimeService.shared
     
     func placeholder(in context: Context) -> WakaTimeEntry {
         WakaTimeEntry(date: Date(), stats: nil) // TODO: update with dummy data
@@ -146,14 +150,20 @@ struct WakatimeStatsEntryView: View {
                 Text("\(formatTime(seconds(from: stats)))")
                     .font(.system(size: 24).weight(.bold))
             }
-            VStack(spacing: 6) {
-                ForEach(stats.projects.filter({ $0.key != "unknown" }).prefix(2), id: \.key) { project in
-                    VStack(alignment: .leading) {
-                        Text("\(project.key)").fontWeight(.semibold)
-                        Text("\(formatTime(Double(project.total)))")
-                            .foregroundStyle(.primary.opacity(0.8))
-                    }
+            if stats.projects.isEmpty {
+                Text("No projects")
                     .font(.system(size: 14))
+                    .foregroundStyle(.gray)
+            } else {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(stats.projects.filter({ $0.key != "unknown" }).prefix(2), id: \.key) { project in
+                        VStack(alignment: .leading) {
+                            Text("\(project.key)").fontWeight(.semibold)
+                            Text("\(formatTime(Double(project.total)))")
+                                .foregroundStyle(.primary.opacity(0.8))
+                        }
+                        .font(.system(size: 14))
+                    }
                 }
             }
         }
@@ -161,10 +171,7 @@ struct WakatimeStatsEntryView: View {
     }
     
     private func seconds(from stats: WakaTimeStats) -> Double {
-        if let codingCategory = stats.categories.first(where: { $0.key.lowercased() == "coding" }) {
-            return Double(codingCategory.total)
-        }
-        return 0.0
+        return stats.categories.reduce(0.0) { $0 + Double($1.total) }
     }
     
     private func formatTime(_ seconds: Double) -> String {
